@@ -1,0 +1,135 @@
+/********************************************************************************
+* @概述：采用SIFT算子进行目标检测
+* @类和函数：SiftFeatureDetector,SiftDescriptorExtractor,
+*			FlannBaseMatcher,findHomography,perspectiveTransform
+* @实现步骤：
+*		Step 1:在图像中使用SIFT算子中SiftFeatureDetector进行关键点检测
+*		Step 2:对检测到的关键点使用SiftDescriptorExtractor计算其特征向量
+*		Step 3:使用FlannBaseMatcher通过特征向量对关键点进行匹配，使用阈值排除误匹配
+*		Step 4:利用findHomography基于匹配的关键点找出相应的透视变换
+*		Step 5:利用perspectiveTransform函数映射点群，在场景中获取目标的位置
+*
+* @概述：ImageStitching（利用Samples进行简单的图片拼接）
+* @实现步骤：直接利用系统自带函数进行Image Stitching
+*
+* @author:KevinYu
+* @time:2017/08/17/19:50
+*********************************************************************************/
+
+
+#include <iostream>
+#include <fstream>
+#include "opencv2/highgui/highgui.hpp"
+#include <opencv2\core\core.hpp>
+#include <stitching.hpp>
+#include <time.h>
+
+using namespace std;
+using namespace cv;
+
+bool try_use_gpu = false;
+vector<Mat> imgs;
+string result_name = "result.jpg";
+
+void printUsage();
+int parseCmdArgs(int argc, char** argv);
+
+int main1(int argc, char* argv[])
+{
+	clock_t start_time = clock(); // 获取当前系统时间
+
+	argv[1] = "1.JPG";
+	argv[2] = "2.JPG";
+	/*argv[3] = "4-3.JPG";
+	argv[4] = "4-4.JPG";
+	argv[5] = "4-5.JPG";
+	argv[6] = "4-6.JPG";*/
+	//argv[7] = "4-7.JPG";
+	/*argv[8] = "8.JPG";
+	argv[9] = "9.JPG";
+	argv[10] = "10.JPG";*/
+	argv[3] = "--try_use_gpu";
+	argv[4] = "yes";
+	int retval = parseCmdArgs(5, argv);
+	if (retval) return -1;
+
+	Mat pano;
+	Stitcher stitcher = Stitcher::createDefault(try_use_gpu);
+	Stitcher::Status status = stitcher.stitch(imgs, pano);
+
+	if (status != Stitcher::OK)
+	{
+		cout << "Can't stitch images, error code = " << int(status) << endl;
+		return -1;
+	}
+
+	imwrite(result_name, pano);
+	imshow("result",pano);
+
+	clock_t end_time = clock(); // 获取当前系统时间
+	cout << "Running time is:" << static_cast<double>(end_time - start_time) / CLOCKS_PER_SEC * 1000 << "ms" << endl;
+
+	waitKey(0);
+	return 0;
+}
+
+
+void printUsage()
+{
+	cout <<
+		"Rotation model images stitcher.\n\n"
+		"stitching img1 img2 [...imgN]\n\n"
+		"Flags:\n"
+		"  --try_use_gpu (yes|no)\n"
+		"      Try to use GPU. The default value is 'no'. All default values\n"
+		"      are for CPU mode.\n"
+		"  --output <result_img>\n"
+		"      The default is 'result.jpg'.\n";
+}
+
+
+int parseCmdArgs(int argc, char** argv)
+{
+	if (argc == 1)
+	{
+		printUsage();
+		return -1;
+	}
+	for (int i = 1; i < argc; ++i)
+	{
+		if (string(argv[i]) == "--help" || string(argv[i]) == "/?")
+		{
+			printUsage();
+			return -1;
+		}
+		else if (string(argv[i]) == "--try_use_gpu")
+		{
+			if (string(argv[i + 1]) == "no")
+				try_use_gpu = false;
+			else if (string(argv[i + 1]) == "yes")
+				try_use_gpu = true;
+			else
+			{
+				cout << "Bad --try_use_gpu flag value\n";
+				return -1;
+			}
+			i++;
+		}
+		else if (string(argv[i]) == "--output")
+		{
+			result_name = argv[i + 1];
+			i++;
+		}
+		else
+		{
+			Mat img = imread(argv[i]);
+			if (img.empty())
+			{
+				cout << "Can't read image '" << argv[i] << "'\n";
+				return -1;
+			}
+			imgs.push_back(img);
+		}
+	}
+	return 0;
+}
